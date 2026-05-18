@@ -121,6 +121,7 @@ echo
 info "开始运行所有测试..."
 echo "----------------------------------------"
 
+# 自行添加测试用例
 run_fio_test "4k-randread" "randread" "4k" "$RESULT_DIR/fio_4k_randread_$TIMESTAMP.json"
 run_fio_test "4k-randwrite" "randwrite" "4k" "$RESULT_DIR/fio_4k_randwrite_$TIMESTAMP.json"
 run_fio_test "4m-seqread" "read" "4m" "$RESULT_DIR/fio_4m_seqread_$TIMESTAMP.json"
