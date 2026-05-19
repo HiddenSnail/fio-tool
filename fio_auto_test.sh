@@ -6,11 +6,13 @@ set -euo pipefail
 # ==============================================
 TEST_DIR="/mnt/test_disk/fio_test"  # 测试文件存放目录（必须在要测试的磁盘上）
 RESULT_DIR="./fio_results"          # 结果文件存放目录
-TEST_FILE_SIZE="20G"                # 测试文件大小（建议为内存的2倍以上）
+TEST_FILE_SIZE="100G"               # 测试文件大小（建议为内存的2倍以上）
 RUNTIME="300"                       # 每个测试运行时间（秒）
+RAMP_TIME="20"                      # 预热时间（秒）- 避免初始阶段扰动
 IODEPTH="32"                        # I/O队列深度
-NUMJOBS="1"                         # 并发作业数
+NUMJOBS="8"                         # 并发作业数
 KEEP_TEST_FILE="false"              # 测试完成后是否保留测试文件（true/false）
+INVALIDATE_CACHE="1"                # 测试前清除缓存（1=启用，避免缓存影响）
 
 # ==============================================
 # 颜色定义
@@ -70,12 +72,14 @@ run_fio_test() {
         --filename="$TEST_DIR/fio_test_file" \
         --ioengine=libaio \
         --direct=1 \
+        --invalidate=$INVALIDATE_CACHE \
         --rw="$rw_mode" \
         --bs="$block_size" \
         --size="$TEST_FILE_SIZE" \
         --numjobs="$NUMJOBS" \
         --iodepth="$IODEPTH" \
         --runtime="$RUNTIME" \
+        --ramp_time="$RAMP_TIME" \
         --time_based \
         --group_reporting \
         --output-format=json \
