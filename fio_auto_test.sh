@@ -13,6 +13,7 @@ IODEPTH=32
 NUMJOBS=8
 KEEP_TEST_FILE=false
 INVALIDATE_CACHE=1
+RAW_DEVICE=""
 
 # ==============================================
 # 测试场景定义
@@ -35,6 +36,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 AUTO_MODE=false
+DAEMON_MODE=false
 
 # ==============================================
 # 工具函数
@@ -79,7 +81,7 @@ check_prerequisites() {
 
     # 3. libaio ioengine 是否可用
     if command -v fio &> /dev/null; then
-        if ! fio --name=probe --ioengine=libaio --runtime=0 --size=1M --output=/dev/null 2>/dev/null; then
+        if ! fio --name=probe --filename=/dev/null --ioengine=libaio --runtime=0 --size=1M --output=/dev/null 2>/dev/null; then
             warn "libaio I/O 引擎不可用，将回退到 sync (psync)"
             echo "   Linux 安装: sudo apt install libaio-dev 或 sudo yum install libaio"
             # Record the fallback for later use
@@ -95,18 +97,19 @@ check_prerequisites() {
         echo "   Linux:   sudo apt install bc 或 sudo yum install bc"
         echo "   macOS:   已预装"
     fi
-
-    # 5. TEST_DIR 是否可写
-    if ! mkdir -p "$TEST_DIR" 2>/dev/null; then
-        warn "测试目录 ($TEST_DIR) 创建失败，请检查路径和权限"
-        echo "   提示: 通常需要挂载点有写权限，或使用 sudo"
-        failures=$((failures + 1))
-    else
-        if ! touch "$TEST_DIR/.fio_write_test" 2>/dev/null; then
-            warn "测试目录 ($TEST_DIR) 不可写"
+    if [ -z "$RAW_DEVICE" ]; then
+        # 5. TEST_DIR 是否可写
+        if ! mkdir -p "$TEST_DIR" 2>/dev/null; then
+            warn "测试目录 ($TEST_DIR) 创建失败，请检查路径和权限"
+            echo "   提示: 通常需要挂载点有写权限，或使用 sudo"
             failures=$((failures + 1))
         else
-            rm -f "$TEST_DIR/.fio_write_test"
+            if ! touch "$TEST_DIR/.fio_write_test" 2>/dev/null; then
+                warn "测试目录 ($TEST_DIR) 不可写"
+                failures=$((failures + 1))
+            else
+                rm -f "$TEST_DIR/.fio_write_test"
+            fi
         fi
     fi
 
@@ -123,8 +126,9 @@ check_prerequisites() {
         fi
     fi
 
-    # 7. 磁盘空间
-    check_disk_space
+    if [ -z "$RAW_DEVICE" ]; then
+        check_disk_space
+    fi
 
     if (( failures > 0 )); then
         error "前置检查未通过 ($failures 项失败)，请修复后重试"
@@ -134,6 +138,7 @@ check_prerequisites() {
 
 # 磁盘空间检查
 check_disk_space() {
+    [ -n "$RAW_DEVICE" ] && return
     local size_num
     size_num=$(echo "$TEST_FILE_SIZE" | sed 's/[GgMmKk]$//')
     local size_unit
@@ -177,41 +182,75 @@ collect_metadata() {
 
     # 磁盘设备信息
     local disk_device="" disk_fstype="" disk_size=""
-    case "$(uname)" in
-        Darwin)
-            local dev_str
-            dev_str=$(df "$TEST_DIR" 2>/dev/null | tail -1 | awk '{print $1}')
-            disk_device="$dev_str"
-            # macOS 用 diskutil 获取型号
-            if command -v diskutil &> /dev/null && [ -n "$dev_str" ]; then
+    if [ -n "$RAW_DEVICE" ]; then
+        disk_device="$RAW_DEVICE"
+        disk_fstype="raw_device"
+        case "$(uname)" in
+            Darwin)
                 local disk_name
-                disk_name=$(echo "$dev_str" | sed 's/^\/dev\///; s/s[0-9]*$//')
-                local disk_info
-                disk_info=$(diskutil info "$disk_name" 2>/dev/null || true)
-                disk_size=$(echo "$disk_info" | grep -i "Total Size" | sed 's/.*://' | xargs || echo "")
-            fi
-            # macOS df 没有 -T，用 stat 获取文件系统类型
-            disk_fstype=$(stat -f "%T" "$TEST_DIR" 2>/dev/null || echo "unknown")
-            ;;
-        *)
-            disk_device=$(df --output=source "$TEST_DIR" 2>/dev/null | tail -1 || df "$TEST_DIR" 2>/dev/null | tail -1 | awk '{print $1}')
-            disk_fstype=$(df -T "$TEST_DIR" 2>/dev/null | tail -1 | awk '{print $2}' || stat -f -c '%T' "$TEST_DIR" 2>/dev/null || echo "unknown")
-            # 尝试获取 SSD/HDD 类型
-            if command -v lsblk &> /dev/null && [ -n "$disk_device" ]; then
-                local base_dev
-                base_dev=$(echo "$disk_device" | sed 's/[0-9]*$//')
-                local rot
-                rot=$(lsblk -d -o ROTA "$base_dev" 2>/dev/null | tail -1 || echo "")
-                if [ "$rot" = "0" ]; then disk_size="${disk_size} (SSD)"; fi
-                if [ "$rot" = "1" ]; then disk_size="${disk_size} (HDD)"; fi
-            fi
-            if command -v smartctl &> /dev/null && [ -n "$disk_device" ]; then
-                local model
-                model=$(smartctl -i "$disk_device" 2>/dev/null | grep -i "Device Model\|Model Number" | sed 's/.*: *//' || echo "")
-                [ -n "$model" ] && disk_device="${disk_device} ($model)"
-            fi
-            ;;
-    esac
+                disk_name=$(echo "$RAW_DEVICE" | sed 's/^\/dev\///; s/s[0-9]*$//')
+                if command -v diskutil &> /dev/null; then
+                    local disk_info
+                    disk_info=$(diskutil info "$disk_name" 2>/dev/null || true)
+                    disk_size=$(echo "$disk_info" | grep -i "Total Size" | sed 's/.*://' | xargs || "")
+                fi
+                ;;
+            *)
+                if command -v lsblk &> /dev/null; then
+                    local base_dev
+                    base_dev=$(echo "$RAW_DEVICE" | sed 's/[0-9]*$//')
+                    local rot
+                    rot=$(lsblk -d -o ROTA "$base_dev" 2>/dev/null | tail -1 || echo "")
+                    if [ "$rot" = "0" ]; then disk_size="${disk_size} (SSD)"; fi
+                    if [ "$rot" = "1" ]; then disk_size="${disk_size} (HDD)"; fi
+                    local dev_size
+                    dev_size=$(lsblk -d -o SIZE "$base_dev" 2>/dev/null | tail -1 || echo "")
+                    [ -n "$dev_size" ] && disk_size="${dev_size}"
+                fi
+                if command -v smartctl &> /dev/null; then
+                    local model
+                    model=$(smartctl -i "$RAW_DEVICE" 2>/dev/null | grep -i "Device Model\|Model Number" | sed 's/.*: *//' || echo "")
+                    [ -n "$model" ] && disk_device="${RAW_DEVICE} ($model)"
+                fi
+                ;;
+        esac
+    else
+        case "$(uname)" in
+            Darwin)
+                local dev_str
+                dev_str=$(df "$TEST_DIR" 2>/dev/null | tail -1 | awk '{print $1}')
+                disk_device="$dev_str"
+                # macOS 用 diskutil 获取型号
+                if command -v diskutil &> /dev/null && [ -n "$dev_str" ]; then
+                    local disk_name
+                    disk_name=$(echo "$dev_str" | sed 's/^\/dev\///; s/s[0-9]*$//')
+                    local disk_info
+                    disk_info=$(diskutil info "$disk_name" 2>/dev/null || true)
+                    disk_size=$(echo "$disk_info" | grep -i "Total Size" | sed 's/.*://' | xargs || echo "")
+                fi
+                # macOS df 没有 -T，用 stat 获取文件系统类型
+                disk_fstype=$(stat -f "%T" "$TEST_DIR" 2>/dev/null || echo "unknown")
+                ;;
+            *)
+                disk_device=$(df --output=source "$TEST_DIR" 2>/dev/null | tail -1 || df "$TEST_DIR" 2>/dev/null | tail -1 | awk '{print $1}')
+                disk_fstype=$(df -T "$TEST_DIR" 2>/dev/null | tail -1 | awk '{print $2}' || stat -f -c '%T' "$TEST_DIR" 2>/dev/null || echo "unknown")
+                # 尝试获取 SSD/HDD 类型
+                if command -v lsblk &> /dev/null && [ -n "$disk_device" ]; then
+                    local base_dev
+                    base_dev=$(echo "$disk_device" | sed 's/[0-9]*$//')
+                    local rot
+                    rot=$(lsblk -d -o ROTA "$base_dev" 2>/dev/null | tail -1 || echo "")
+                    if [ "$rot" = "0" ]; then disk_size="${disk_size} (SSD)"; fi
+                    if [ "$rot" = "1" ]; then disk_size="${disk_size} (HDD)"; fi
+                fi
+                if command -v smartctl &> /dev/null && [ -n "$disk_device" ]; then
+                    local model
+                    model=$(smartctl -i "$disk_device" 2>/dev/null | grep -i "Device Model\|Model Number" | sed 's/.*: *//' || echo "")
+                    [ -n "$model" ] && disk_device="${disk_device} ($model)"
+                fi
+                ;;
+        esac
+    fi
 
     # CPU 信息
     local cpu_model="" cpu_cores=""
@@ -249,8 +288,8 @@ collect_metadata() {
     "logical_cores": "$cpu_cores"
   },
   "memory_gb": "$memory_gb",
-  "test_target": {
-    "test_dir": "$TEST_DIR",
+    "test_dir": "${RAW_DEVICE:-$TEST_DIR}",
+    "device_type": "${RAW_DEVICE:+raw_device}${RAW_DEVICE:-file}",
     "device": "$disk_device",
     "filesystem": "$disk_fstype",
     "disk_details": "$disk_size"
@@ -308,8 +347,8 @@ run_fio_test() {
     start_ts=$(date +%s)
 
     fio \
+        --filename="${RAW_DEVICE:-$TEST_DIR/fio_test_file}" \
         --name="$test_name" \
-        --filename="$TEST_DIR/fio_test_file" \
         --ioengine="$ioengine" \
         --direct=1 \
         --invalidate=$INVALIDATE_CACHE \
@@ -345,6 +384,7 @@ usage() {
 选项:
   -y, --yes                自动模式，跳过确认直接执行
   -h, --help               显示此帮助信息
+  --daemon                 守护模式，后台运行，退出 Shell 后不中断
 
   测试参数覆盖:
   --runtime <秒>           每项测试运行时长 (默认: ${RUNTIME})
@@ -353,8 +393,9 @@ usage() {
   --iodepth <N>            I/O 队列深度 (默认: ${IODEPTH})
   --numjobs <N>            并发作业数 (默认: ${NUMJOBS})
   --test-dir <路径>        测试文件存放目录 (默认: ${TEST_DIR})
-  --result-dir <路径>      结果文件存放目录 (默认: ${RESULT_DIR})
   --keep-test-file         测试完成后保留测试文件
+  --raw-device <路径>     直接测试裸设备（如 /dev/sdb），跳过文件系统检查
+                          启用后 --test-dir 和 --keep-test-file 参数无效
 
   场景选择:
   --scenarios <列表>       自定义测试场景，逗号分隔
@@ -388,6 +429,7 @@ parse_args() {
             --test-dir)         TEST_DIR="$2"; shift 2 ;;
             --result-dir)       RESULT_DIR="$2"; shift 2 ;;
             --keep-test-file)   KEEP_TEST_FILE=true; shift ;;
+            --daemon)           DAEMON_MODE=true; shift ;;
             --scenarios)
                 # 解析逗号分隔的场景: "name:rw:bs,name:rw:bs"
                 IFS=',' read -ra CUSTOM_SCENARIOS <<< "$2"
@@ -397,6 +439,7 @@ parse_args() {
                 done
                 shift 2
                 ;;
+            --raw-device)       RAW_DEVICE="$2"; shift 2 ;;
             *)
                 error "未知参数: $1，使用 -h 查看帮助"
                 ;;
@@ -409,6 +452,48 @@ parse_args() {
 # ==============================================
 parse_args "$@"
 
+# ==============================================
+# 守护模式处理
+# ==============================================
+if [ "$DAEMON_MODE" = true ]; then
+    # 自动启用 -y 模式，后台运行
+    LOG_DIR="./daemon_logs"
+    mkdir -p "$LOG_DIR"
+    TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+    LOG_FILE="$LOG_DIR/fio_auto_${TIMESTAMP}.log"
+    PID_FILE="$LOG_DIR/fio_auto_${TIMESTAMP}.pid"
+
+    # 构建新参数：移除 --daemon，添加 -y
+    NEW_ARGS=()
+    ADDED_Y=false
+    for arg in "$@"; do
+        if [ "$arg" = "--daemon" ]; then
+            continue
+        fi
+        if [ "$arg" = "-y" ] || [ "$arg" = "--yes" ]; then
+            ADDED_Y=true
+        fi
+        NEW_ARGS+=("$arg")
+    done
+    if [ "$ADDED_Y" = false ]; then
+        NEW_ARGS+=("-y")
+    fi
+
+    nohup bash "$0" "${NEW_ARGS[@]}" > "$LOG_FILE" 2>&1 &
+    BGPID=$!
+    echo "$BGPID" > "$PID_FILE"
+
+    echo "========================================"
+    echo "  FIO 在后台启动 (PID: $BGPID)"
+    echo "========================================"
+    echo "日志文件: $LOG_FILE"
+    echo "PID 文件: $PID_FILE"
+    echo
+    echo "查看实时日志:  tail -f $LOG_FILE"
+    echo "停止测试:      kill -TERM $BGPID"
+    exit 0
+fi
+
 separator
 echo "  FIO 磁盘性能自动化测试  v1.0"
 separator
@@ -418,7 +503,9 @@ echo
 check_prerequisites
 
 # 创建目录
-mkdir -p "$TEST_DIR"
+if [ -z "$RAW_DEVICE" ]; then
+    mkdir -p "$TEST_DIR"
+fi
 mkdir -p "$RESULT_DIR"
 
 # 测试标识
@@ -433,7 +520,11 @@ collect_metadata "$ENV_FILE"
 echo
 total_estimate=$(( ${#TEST_SCENARIOS[@]} * (RUNTIME + RAMP_TIME) ))
 warn "即将运行 ${#TEST_SCENARIOS[@]} 项测试，预估总耗时约 $(format_time $total_estimate)"
-warn "写测试会覆盖 $TEST_DIR 中的数据，请注意备份"
+if [ -n "$RAW_DEVICE" ]; then
+    warn "写测试会覆盖裸设备 $RAW_DEVICE 中的数据，请确认该设备上的数据已备份"
+else
+    warn "写测试会覆盖 $TEST_DIR 中的数据，请注意备份"
+fi
 warn "测试期间磁盘将处于高负载，可能影响其他应用"
 echo
 
@@ -490,14 +581,15 @@ for scenario in "${TEST_SCENARIOS[@]}"; do
 done
 
 # 清理测试文件
-if [ "$KEEP_TEST_FILE" = false ]; then
-    info "正在清理测试文件..."
-    rm -f "$TEST_DIR/fio_test_file"
-    info "测试文件已删除"
-else
-    warn "测试文件保留在: $TEST_DIR/fio_test_file"
+if [ -z "$RAW_DEVICE" ]; then
+    if [ "$KEEP_TEST_FILE" = false ]; then
+        info "正在清理测试文件..."
+        rm -f "$TEST_DIR/fio_test_file"
+        info "测试文件已删除"
+    else
+        warn "测试文件保留在: $TEST_DIR/fio_test_file"
+    fi
 fi
-
 # 完成
 total_duration=$(( $(date +%s) - scenario_start_ts ))
 echo
