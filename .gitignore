@@ -1,4 +1,5 @@
-./.DS_Store
+.DS_Store
 fio_results/
-./reports/
+reports/
+daemon_logs/
 .deployrc

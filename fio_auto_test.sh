@@ -427,9 +427,23 @@ load_config() {
     fi
     info "加载配置文件: $config_file"
 
-    while IFS='=' read -r key val || [ -n "$key" ]; do
+    while IFS= read -r line || [ -n "$line" ]; do
+        # 行尾反斜线续行
+        while [[ "$line" =~ \$ ]]; do
+            line="${line%\\}"
+            IFS= read -r next_line || break
+            # 去掉续行前导空格
+            next_line="${next_line#"${next_line%%[![:space:]]*}"}"
+            line="$line$next_line"
+        done
+
         # 跳过注释和空行
-        [[ "$key" =~ ^[[:space:]]*# ]] && continue
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "$line" ]] && continue
+
+        # 按第一个 = 分割
+        key="${line%%=*}"
+        val="${line#*=}"
         key="${key#"${key%%[![:space:]]*}"}"  # trim leading
         key="${key%"${key##*[![:space:]]}"}"  # trim trailing
         val="${val#"${val%%[![:space:]]*}"}"
