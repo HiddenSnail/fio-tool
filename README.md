@@ -76,7 +76,8 @@
 | 4m-seqread | 顺序读 | 4MB | 顺序读带宽 |
 | 4m-seqwrite | 顺序写 | 4MB | 顺序写带宽 |
 
-通过 `--scenarios` 可覆盖为任意场景组合，格式 `名称:读写模式:块大小`。
+通过 `--scenarios` 可覆盖为任意场景组合，格式 `名称:读写模式:块大小[:读占比]`。
+读占比为可选字段（1~99），仅在 `randrw` / `rw` 模式下生效，默认 50（即读写各半）。
 
 ### 用法
 
@@ -105,8 +106,9 @@
 
   场景选择:
   --scenarios <列表>       自定义测试场景，逗号分隔
-                           格式: 场景名:读写模式:块大小
-                           示例: "4k-randread:randread:4k,1m-seqread:read:1m"
+                           格式: 场景名:读写模式:块大小[:读占比(1-99)]
+                           示例: "4k-randread:randread:4k,4k-randrw-70:randrw:4k:70"
+                           读占比默认 50，仅在 randrw/rw 下生效
                            (默认包含 4k-randread, 4k-randwrite, 4m-seqread, 4m-seqwrite)
 
 示例:
@@ -116,6 +118,7 @@
   ./fio_auto_test.sh --runtime 120 --iodepth 64 --numjobs 16
   ./fio_auto_test.sh --raw-device /dev/nvme0n1 --runtime 60 --iodepth 128 -y
   ./fio_auto_test.sh --config ./my_test.conf -y
+  ./fio_auto_test.sh --scenarios "4k-randrw-70:randrw:4k:70,128k-seqwrite:write:128k" -y
 ```
 
 ### 配置参数
@@ -193,12 +196,17 @@ IODEPTH=64                        # I/O 队列深度
 NUMJOBS=16                        # 并发作业数
 KEEP_TEST_FILE=false              # 是否保留测试文件
 
-# 测试场景（逗号分隔，覆盖默认的 4 项）
-TEST_SCENARIOS=4k-randread:randread:4k,4k-randwrite:randwrite:4k,1m-seqread:read:1m,1m-seqwrite:write:1m
+# 测试场景（逗号分隔，支持反斜线续行，覆盖默认的 4 项）
+TEST_SCENARIOS=4k-randread:randread:4k, \
+               4k-randwrite:randwrite:4k, \
+               1m-seqread:read:1m, \
+               1m-seqwrite:write:1m
 
 # 裸设备（可选，设置后自动启用裸设备模式）
 # RAW_DEVICE=/dev/nvme0n1
 ```
+
+**续行规则：** 配置行末尾加 `\` 可续行到下一行，续行的前导空格自动忽略。适用于 `TEST_SCENARIOS` 等长值。
 
 **加载方式（按优先级降序）：**
 
@@ -216,6 +224,8 @@ TEST_SCENARIOS=4k-randread:randread:4k,4k-randwrite:randwrite:4k,1m-seqread:read
 # 配置文件 + 临时覆盖（runtime 用 60 替代配置中的 120）
 ./fio_auto_test.sh --config fio_test.conf --runtime 60 -y
 ```
+
+**模板文件：** `config/fio_test_hdd.conf`（机械盘）和 `config/fio_test_ssd.conf`（固态盘）可直接使用或参考修改。
 
 ### 裸设备模式
 

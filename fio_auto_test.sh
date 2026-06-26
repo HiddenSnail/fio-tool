@@ -311,7 +311,8 @@ EOF
     local idx=0
     for scenario in "${TEST_SCENARIOS[@]}"; do
         idx=$((idx + 1))
-        IFS=':' read -r name mode bs <<< "$scenario"
+        IFS=':' read -ra sp <<< "$scenario"
+    local name="${sp[0]}" mode="${sp[1]}" bs="${sp[2]}" rwmixread="${sp[3]:-}"
         local comma=","
         [ "$idx" -eq "$count" ] && comma=""
         echo "    { \"name\": \"$name\", \"rw\": \"$mode\", \"bs\": \"$bs\" }$comma" >> "$meta_file"
@@ -332,6 +333,7 @@ run_fio_test() {
     local rw_mode="$2"
     local block_size="$3"
     local output_file="$4"
+    local rwmixread="${5:-}"
     local ioengine="${FALLBACK_IOENGINE:-libaio}"
 
     separator
@@ -341,6 +343,9 @@ run_fio_test() {
     echo "  文件大小:  ${TEST_FILE_SIZE}"
     echo "  运行时长:  $(format_time $RUNTIME)"
     echo "  I/O引擎:   ${ioengine}"
+    if [ -n "$rwmixread" ]; then
+        echo "  读占比:    ${rwmixread}%"
+    fi
     separator
 
     # 记录开始时间
@@ -350,6 +355,10 @@ run_fio_test() {
     local time_based_flag=""
     if [ "$RUNTIME" -gt 0 ]; then
         time_based_flag="--time_based"
+    fi
+    local rwmixread_flag=""
+    if [ -n "$rwmixread" ]; then
+        rwmixread_flag="--rwmixread=$rwmixread"
     fi
 
     fio \
@@ -366,6 +375,7 @@ run_fio_test() {
         --runtime="$RUNTIME" \
         --ramp_time="$RAMP_TIME" \
         $time_based_flag \
+        $rwmixread_flag \
         --group_reporting \
         --description="run=${TIMESTAMP}|size=${TEST_FILE_SIZE}|iodepth=${IODEPTH}|numjobs=${NUMJOBS}|ioengine=${ioengine}" \
         --output-format=json \
@@ -405,8 +415,9 @@ usage() {
 
   场景选择:
   --scenarios <列表>       自定义测试场景，逗号分隔
-                           格式: 场景名:读写模式:块大小
-                           示例: --scenarios "4k-randread:randread:4k,1m-seqread:read:1m"
+                           格式: 场景名:读写模式:块大小[:读占比(1-99)]
+                           示例: --scenarios "4k-randread:randread:4k,4k-randrw-70:randrw:4k:70"
+                           读占比默认 50（写=100-读占比），仅在 randrw/rw 下生效
                            (默认包含 4k-randread, 4k-randwrite, 4m-seqread, 4m-seqwrite)
 
 示例:
@@ -649,7 +660,11 @@ avg_per_test=0
 eta_remaining=""
 
 for scenario in "${TEST_SCENARIOS[@]}"; do
-    IFS=':' read -r test_name rw_mode block_size <<< "$scenario"
+    IFS=':' read -ra sp <<< "$scenario"
+    test_name="${sp[0]}"
+    rw_mode="${sp[1]}"
+    block_size="${sp[2]}"
+    rwmixread="${sp[3]:-}"
     current=$((current + 1))
 
     # 累计进度
@@ -670,7 +685,7 @@ for scenario in "${TEST_SCENARIOS[@]}"; do
     echo
 
     run_fio_test "$test_name" "$rw_mode" "$block_size" \
-        "$RESULT_SUBDIR/fio_${test_name}_${TIMESTAMP}.json"
+        "$RESULT_SUBDIR/fio_${test_name}_${TIMESTAMP}.json" "$rwmixread"
 
     echo
 done
