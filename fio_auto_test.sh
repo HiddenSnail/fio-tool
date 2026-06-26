@@ -362,7 +362,6 @@ run_fio_test() {
         --ramp_time="$RAMP_TIME" \
         --time_based \
         --group_reporting \
-        --status-interval=30 \
         --description="run=${TIMESTAMP}|size=${TEST_FILE_SIZE}|iodepth=${IODEPTH}|numjobs=${NUMJOBS}|ioengine=${ioengine}" \
         --output-format=json \
         --output="$output_file"
