@@ -10,6 +10,7 @@ DEFAULT_OUTPUT_DIR="./reports" # 专用报告输出目录
 SHOW_IN_TERMINAL=true
 SORT_RESULTS=true
 GENERATE_CSV=false      # 默认不生成CSV，需要通过--csv选项启用
+LATEST_MODE=false       # --latest 模式，自动选择最新时间戳子目录
 DEBUG_MODE=false        # 调试模式，显示详细的JSON结构信息
 
 # ==============================================
@@ -66,6 +67,7 @@ show_help() {
     echo "  -q, --quiet           不在终端显示报告，只保存到文件"
     echo "  -n, --no-sort         不按测试类型排序结果"
     echo "  -c, --csv             同时生成CSV格式报告（可导入Excel）"
+    echo "  -l, --latest          自动选择结果目录中最新的一次测试"
     echo "  --debug               启用调试模式，显示详细信息"
     echo "  -h, --help            显示此帮助信息"
     echo
@@ -73,6 +75,7 @@ show_help() {
     echo "  $0                          # 扫描默认目录并显示文本报告"
     echo "  $0 -c                       # 生成文本报告+CSV报告"
     echo "  $0 -d ./my_results -c       # 扫描指定目录并生成两种格式"
+    echo "  $0 --latest                 # 自动解析最新的一次测试结果"
     echo "  $0 --debug                  # 调试模式，查看JSON结构"
     exit 0
 }
@@ -99,6 +102,10 @@ parse_arguments() {
                 ;;
             -c|--csv)
                 GENERATE_CSV=true
+                shift
+                ;;
+            -l|--latest)
+                LATEST_MODE=true
                 shift
                 ;;
             --debug)
@@ -136,7 +143,7 @@ find_json_files() {
     # 查找所有JSON文件
     while IFS= read -r -d $'\0' file; do
         temp_files+=("$file")
-    done < <(find "$RESULT_DIR" -maxdepth 1 -type f -name "*.json" -print0)
+    done < <(find "$RESULT_DIR" -maxdepth 2 -type f -name "*.json" -print0)
     
     if [ ${#temp_files[@]} -eq 0 ]; then
         error "在 $RESULT_DIR 目录中未找到任何JSON文件"
@@ -427,6 +434,16 @@ generate_text_summary() {
 check_dependencies
 parse_arguments "$@"
 validate_directory
+
+# 自动选择最新测试结果
+if [ "$LATEST_MODE" = true ]; then
+    latest_dir=$(find "$RESULT_DIR" -maxdepth 1 -type d -name "[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_*" | sort -rn | head -1)
+    if [ -z "$latest_dir" ]; then
+        error "在 $RESULT_DIR 下未找到时间戳子目录（--latest 模式）"
+    fi
+    RESULT_DIR="$latest_dir"
+    info "自动选择最新测试: $(basename "$RESULT_DIR")"
+fi
 
 find_json_files
 

@@ -580,9 +580,12 @@ mkdir -p "$RESULT_DIR"
 # 测试标识
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 info "本次测试标识: $TIMESTAMP"
+RESULT_SUBDIR="$RESULT_DIR/$TIMESTAMP"
+mkdir -p "$RESULT_SUBDIR"
+info "结果将保存到: $RESULT_SUBDIR"
 
 # 收集环境元数据
-ENV_FILE="$RESULT_DIR/_env_${TIMESTAMP}.json"
+ENV_FILE="$RESULT_SUBDIR/_env_${TIMESTAMP}.json"
 collect_metadata "$ENV_FILE"
 
 # 确认
@@ -644,7 +647,7 @@ for scenario in "${TEST_SCENARIOS[@]}"; do
     echo
 
     run_fio_test "$test_name" "$rw_mode" "$block_size" \
-        "$RESULT_DIR/fio_${test_name}_${TIMESTAMP}.json"
+        "$RESULT_SUBDIR/fio_${test_name}_${TIMESTAMP}.json"
 
     echo
 done
@@ -664,9 +667,9 @@ total_duration=$(( $(date +%s) - scenario_start_ts ))
 echo
 separator
 info "全部完成！总耗时 $(format_time $total_duration)"
-info "结果目录: $RESULT_DIR"
+info "结果目录: $RESULT_SUBDIR"
 echo
-ls -lh "$RESULT_DIR"/*"$TIMESTAMP"* 2>/dev/null
+ls -lh "$RESULT_SUBDIR"/*.json 2>/dev/null
 echo
 info "运行 $(basename "$0") -h 查看后续步骤"
 separator
