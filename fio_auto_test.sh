@@ -14,6 +14,7 @@ NUMJOBS=8
 KEEP_TEST_FILE=false
 INVALIDATE_CACHE=1
 RAW_DEVICE=""
+CONFIG_FILE=""
 
 # ==============================================
 # 测试场景定义
@@ -385,6 +386,7 @@ usage() {
   -y, --yes                自动模式，跳过确认直接执行
   -h, --help               显示此帮助信息
   --daemon                 守护模式，后台运行，退出 Shell 后不中断
+  --config <文件>          从配置文件加载参数（默认: ./fio_test.conf）
 
   测试参数覆盖:
   --runtime <秒>           每项测试运行时长 (默认: ${RUNTIME})
@@ -415,6 +417,47 @@ EOF
 
 # ==============================================
 # 参数解析
+
+# ==============================================
+# 配置文件加载
+# ==============================================
+load_config() {
+    local config_file="$1"
+    if [ ! -f "$config_file" ]; then
+        error "配置文件不存在: $config_file"
+    fi
+    info "加载配置文件: $config_file"
+
+    while IFS='=' read -r key val || [ -n "$key" ]; do
+        # 跳过注释和空行
+        [[ "$key" =~ ^[[:space:]]*# ]] && continue
+        key="${key#"${key%%[![:space:]]*}"}"  # trim leading
+        key="${key%"${key##*[![:space:]]}"}"  # trim trailing
+        val="${val#"${val%%[![:space:]]*}"}"
+        val="${val%"${val##*[![:space:]]}"}"
+        [ -z "$key" ] && continue
+
+        case "$key" in
+            TEST_DIR)           TEST_DIR="$val" ;;
+            RESULT_DIR)         RESULT_DIR="$val" ;;
+            TEST_FILE_SIZE)     TEST_FILE_SIZE="$val" ;;
+            RUNTIME)            RUNTIME="$val" ;;
+            RAMP_TIME)          RAMP_TIME="$val" ;;
+            IODEPTH)            IODEPTH="$val" ;;
+            NUMJOBS)            NUMJOBS="$val" ;;
+            KEEP_TEST_FILE)     KEEP_TEST_FILE="$val" ;;
+            INVALIDATE_CACHE)   INVALIDATE_CACHE="$val" ;;
+            RAW_DEVICE)         RAW_DEVICE="$val" ;;
+            TEST_SCENARIOS)
+                TEST_SCENARIOS=()
+                IFS=',' read -ra CUSTOM_SCENARIOS <<< "$val"
+                for s in "${CUSTOM_SCENARIOS[@]}"; do
+                    TEST_SCENARIOS+=("$s")
+                done
+                ;;
+        esac
+    done < "$config_file"
+}
 # ==============================================
 parse_args() {
     while [[ $# -gt 0 ]]; do
@@ -450,7 +493,33 @@ parse_args() {
 # ==============================================
 # 主程序
 # ==============================================
-parse_args "$@"
+# 提前扫描 --config 参数
+CONFIG_ARG=""
+for arg in "$@"; do
+    if [ "$CONFIG_ARG" = "__NEXT__" ]; then CONFIG_FILE="$arg"; CONFIG_ARG=""; break; fi
+    [ "$arg" = "--config" ] && CONFIG_ARG="__NEXT__"
+done
+
+# 未指定时查找默认配置
+if [ -z "$CONFIG_FILE" ]; then
+    [ -f "./fio_test.conf" ] && CONFIG_FILE="./fio_test.conf"
+fi
+
+# 加载配置
+if [ -n "$CONFIG_FILE" ]; then
+    load_config "$CONFIG_FILE"
+fi
+
+# 重新构建参数（移除 --config 及其值）
+CLEAN_ARGS=()
+SKIP_NEXT=false
+for arg in "$@"; do
+    if [ "$SKIP_NEXT" = true ]; then SKIP_NEXT=false; continue; fi
+    if [ "$arg" = "--config" ]; then SKIP_NEXT=true; continue; fi
+    CLEAN_ARGS+=("$arg")
+done
+
+parse_args "${CLEAN_ARGS[@]}"
 
 # ==============================================
 # 守护模式处理

@@ -38,6 +38,9 @@
 # 自定义场景 — 只跑需要的测试
 ./fio_auto_test.sh --scenarios "4k-randread:randread:4k,128k-seqwrite:write:128k"
 
+# 配置文件 — 避免每次手改参数
+./fio_auto_test.sh --config fio_test.conf -y
+
 # 后台运行 — 退出 Shell 不中断
 ./fio_auto_test.sh --daemon --raw-device /dev/nvme0n1 -y
 
@@ -84,6 +87,7 @@
   -y, --yes                自动模式，跳过确认直接执行
   -h, --help               显示此帮助信息
   --daemon                 守护模式，后台运行，退出 Shell 后不中断
+  --config <文件>          从配置文件加载参数（默认: ./fio_test.conf）
 
   测试参数覆盖:
   --runtime <秒>           每项测试运行时长 (默认: 300)
@@ -111,6 +115,7 @@
   ./fio_auto_test.sh --scenarios "4k-randread:randread:4k,128k-seqwrite:write:128k"
   ./fio_auto_test.sh --runtime 120 --iodepth 64 --numjobs 16
   ./fio_auto_test.sh --raw-device /dev/nvme0n1 --runtime 60 --iodepth 128 -y
+  ./fio_auto_test.sh --config ./my_test.conf -y
 ```
 
 ### 配置参数
@@ -173,6 +178,44 @@ kill -TERM $(cat ./daemon_logs/fio_auto_*.pid)
 - 脚本自动用 `nohup` 重新启动自身，所有输出重定向到 `fio_results/fio_auto_{时间戳}.log`
 - PID 写入 `fio_results/fio_auto_{时间戳}.pid`
 - `--daemon` 会自动添加 `-y`（跳过确认），无需额外指定
+
+### 配置文件
+
+将常用参数写进配置文件，避免每次在命令行手敲或修改脚本。配置文件格式为 `KEY=VALUE`，支持注释和留空行：
+
+```bash
+# fio_test.conf — 示例配置
+TEST_DIR=/data/test/fio          # 测试文件路径
+TEST_FILE_SIZE=200G               # 测试文件大小
+RUNTIME=120                       # 每项测试时长（秒）
+RAMP_TIME=30                      # 预热时长
+IODEPTH=64                        # I/O 队列深度
+NUMJOBS=16                        # 并发作业数
+KEEP_TEST_FILE=false              # 是否保留测试文件
+
+# 测试场景（逗号分隔，覆盖默认的 4 项）
+TEST_SCENARIOS=4k-randread:randread:4k,4k-randwrite:randwrite:4k,1m-seqread:read:1m,1m-seqwrite:write:1m
+
+# 裸设备（可选，设置后自动启用裸设备模式）
+# RAW_DEVICE=/dev/nvme0n1
+```
+
+**加载方式（按优先级降序）：**
+
+1. **默认自动发现** — 脚本同级目录有 `fio_test.conf` 则自动加载
+2. **手动指定** — `--config <文件>` 显式指定配置路径
+3. **命令行覆盖** — 任何 CLI 参数都会覆盖配置文件中的同名值
+
+```bash
+# 自动发现同级目录的 fio_test.conf
+./fio_auto_test.sh -y
+
+# 手动指定配置文件
+./fio_auto_test.sh --config /path/to/my_test.conf -y
+
+# 配置文件 + 临时覆盖（runtime 用 60 替代配置中的 120）
+./fio_auto_test.sh --config fio_test.conf --runtime 60 -y
+```
 
 ### 裸设备模式
 
