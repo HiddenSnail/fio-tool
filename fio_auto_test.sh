@@ -347,6 +347,11 @@ run_fio_test() {
     local start_ts
     start_ts=$(date +%s)
 
+    local time_based_flag=""
+    if [ "$RUNTIME" -gt 0 ]; then
+        time_based_flag="--time_based"
+    fi
+
     fio \
         --filename="${RAW_DEVICE:-$TEST_DIR/fio_test_file}" \
         --name="$test_name" \
@@ -360,7 +365,7 @@ run_fio_test() {
         --iodepth="$IODEPTH" \
         --runtime="$RUNTIME" \
         --ramp_time="$RAMP_TIME" \
-        --time_based \
+        $time_based_flag \
         --group_reporting \
         --description="run=${TIMESTAMP}|size=${TEST_FILE_SIZE}|iodepth=${IODEPTH}|numjobs=${NUMJOBS}|ioengine=${ioengine}" \
         --output-format=json \
@@ -429,7 +434,7 @@ load_config() {
 
     while IFS= read -r line || [ -n "$line" ]; do
         # 行尾反斜线续行
-        while [[ "$line" =~ \$ ]]; do
+        while [[ "$line" =~ \\[[:space:]]*$ ]]; do
             line="${line%\\}"
             IFS= read -r next_line || break
             # 去掉续行前导空格
@@ -449,6 +454,11 @@ load_config() {
         val="${val#"${val%%[![:space:]]*}"}"
         val="${val%"${val##*[![:space:]]}"}"
         [ -z "$key" ] && continue
+
+        # 去掉值的首尾引号
+        case "$val" in
+            '*'|"*") val="${val:1:-1}" ;;
+        esac
 
         case "$key" in
             TEST_DIR)           TEST_DIR="$val" ;;
