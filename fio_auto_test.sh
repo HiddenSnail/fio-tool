@@ -277,6 +277,9 @@ collect_metadata() {
             ;;
     esac
 
+    local dev_type="file"
+    [ -n "$RAW_DEVICE" ] && dev_type="raw_device"
+
     cat > "$meta_file" << EOF
 {
   "tool_version": "1.0.0",
@@ -289,8 +292,9 @@ collect_metadata() {
     "logical_cores": "$cpu_cores"
   },
   "memory_gb": "$memory_gb",
+  "test_target": {
     "test_dir": "${RAW_DEVICE:-$TEST_DIR}",
-    "device_type": "${RAW_DEVICE:+raw_device}${RAW_DEVICE:-file}",
+    "device_type": "$dev_type",
     "device": "$disk_device",
     "filesystem": "$disk_fstype",
     "disk_details": "$disk_size"

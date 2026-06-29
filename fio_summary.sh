@@ -4,7 +4,7 @@ set -euo pipefail
 # ==============================================
 # 默认配置参数
 # ==============================================
-DEFAULT_RESULT_DIR="./fio_results"
+DEFAULT_RESULT_DIR="./results"
 DEFAULT_OUTPUT_FILE=""  # 空值表示自动生成带时间戳的文件名
 DEFAULT_OUTPUT_DIR="./reports" # 专用报告输出目录
 SHOW_IN_TERMINAL=true
@@ -313,7 +313,7 @@ generate_csv_summary() {
     # 确保输出目录存在
     mkdir -p "$(dirname "$csv_file")"
     
-    # 写入CSV表头（标准逗号分隔，UTF-8编码）
+# 写入CSV表头（标准逗号分隔，UTF-8编码）
     echo "测试名称,测试时间,块大小,读写模式,队列深度,并发数,读带宽(MB/s),读IOPS,读平均延迟(ms),读95%延迟(ms),读99%延迟(ms),写带宽(MB/s),写IOPS,写平均延迟(ms),写95%延迟(ms),写99%延迟(ms)" > "$csv_file"
     
     # 处理每个JSON文件
@@ -357,6 +357,43 @@ generate_csv_summary() {
     done
     
     info "CSV报告生成成功: $csv_file"
+}
+
+# 生成环境信息CSV（单独文件）
+generate_env_summary() {
+    local env_csv="${OUTPUT_FILE%.txt}_env.csv"
+    local env_file
+    env_file=$(find "$RESULT_DIR" -maxdepth 1 -name "_env_*.json" 2>/dev/null | head -1)
+    
+    if [ -z "$env_file" ] || [ ! -f "$env_file" ]; then
+        return 0
+    fi
+    
+    info "正在生成环境信息CSV: $env_csv"
+    echo "项目,值" > "$env_csv"
+    
+    local field label value
+    for field in hostname kernel fio_version tool_version cpu.model cpu.logical_cores memory_gb test_target.test_dir test_target.device test_target.device_type test_target.disk_details test_target.filesystem; do
+        case "$field" in
+            hostname)              label="主机名" ;;
+            kernel)                label="内核版本" ;;
+            fio_version)           label="FIO版本" ;;
+            tool_version)          label="工具版本" ;;
+            cpu.model)             label="CPU型号" ;;
+            cpu.logical_cores)     label="CPU核数" ;;
+            memory_gb)             label="内存(GB)" ;;
+            test_target.test_dir)  label="测试路径" ;;
+            test_target.device)    label="测试设备" ;;
+            test_target.device_type) label="设备类型" ;;
+            test_target.disk_details) label="磁盘容量" ;;
+            test_target.filesystem) label="文件系统" ;;
+            *)                     label="$field" ;;
+        esac
+        value=$(jq -r "(.$field // .\"${field#*.}\") // \"\"" "$env_file" 2>/dev/null | head -1) || true
+        echo ""$label","$value"" >> "$env_csv"
+    done
+    
+    info "环境信息CSV已生成: $env_csv"
 }
 
 # 生成文本汇总报告
@@ -453,6 +490,7 @@ generate_text_summary
 if [ "$GENERATE_CSV" = true ]; then
     echo
     generate_csv_summary
+    generate_env_summary
 fi
 
 echo
