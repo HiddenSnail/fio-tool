@@ -5,7 +5,7 @@ set -euo pipefail
 # 配置参数 - 默认值（可通过命令行覆盖）
 # ==============================================
 TEST_DIR="/mnt/test_disk/fio_test"
-RESULT_DIR="./fio_results"
+RESULT_DIR="./results"
 TEST_FILE_SIZE="100G"
 RUNTIME=300
 RAMP_TIME=30
