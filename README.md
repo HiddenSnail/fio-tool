@@ -6,10 +6,10 @@
 
 本工具包含两个脚本：
 
-| 脚本 | 作用 |
-|---|---|
-| `fio_auto_test.sh` | 磁盘性能测试执行器，按预设参数运行 4 项标准 FIO 基准测试 |
-| `fio_summary.sh` | 结果汇总报告生成器，扫描 JSON 结果并输出易读的文本/CSV 报告 |
+| 脚本                 | 作用                                  |
+| ------------------ | ----------------------------------- |
+| `fio_auto_test.sh` | 磁盘性能测试执行器，按预设参数运行 4 项标准 FIO 基准测试    |
+| `fio_summary.sh`   | 结果汇总报告生成器，扫描 JSON 结果并输出易读的文本/CSV 报告 |
 
 测试结果以 JSON 格式按场景存放，汇总报告输出到独立目录，结构清晰便于归档对比。
 
@@ -17,11 +17,11 @@
 
 ### 前置依赖
 
-| 工具 | 用途 | 安装 |
-|---|---|---|
-| `fio` | 磁盘 I/O 性能测试 | `sudo apt install fio` / `sudo yum install fio` / `brew install fio` |
-| `jq` | JSON 解析（仅汇总脚本需要） | `sudo apt install jq` / `sudo yum install jq` |
-| `bc` | 浮点数计算（通常预装） | `sudo apt install bc` |
+| 工具    | 用途               | 安装                                                                   |
+| ----- | ---------------- | -------------------------------------------------------------------- |
+| `fio` | 磁盘 I/O 性能测试      | `sudo apt install fio` / `sudo yum install fio` / `brew install fio` |
+| `jq`  | JSON 解析（仅汇总脚本需要） | `sudo apt install jq` / `sudo yum install jq`                        |
+| `bc`  | 浮点数计算（通常预装）      | `sudo apt install bc`                                                |
 
 ## 快速开始
 
@@ -69,12 +69,12 @@
 
 ### 默认测试项
 
-| 测试名称 | I/O 模式 | 块大小 | 衡量指标 |
-|---|---|---|---|
-| 4k-randread | 随机读 | 4KB | 随机读 IOPS 与延迟 |
-| 4k-randwrite | 随机写 | 4KB | 随机写 IOPS 与延迟 |
-| 4m-seqread | 顺序读 | 4MB | 顺序读带宽 |
-| 4m-seqwrite | 顺序写 | 4MB | 顺序写带宽 |
+| 测试名称         | I/O 模式 | 块大小 | 衡量指标         |
+| ------------ | ------ | --- | ------------ |
+| 4k-randread  | 随机读    | 4KB | 随机读 IOPS 与延迟 |
+| 4k-randwrite | 随机写    | 4KB | 随机写 IOPS 与延迟 |
+| 4m-seqread   | 顺序读    | 4MB | 顺序读带宽        |
+| 4m-seqwrite  | 顺序写    | 4MB | 顺序写带宽        |
 
 通过 `--scenarios` 可覆盖为任意场景组合，格式 `名称:读写模式:块大小[:读占比]`。
 读占比为可选字段（1~99），仅在 `randrw` / `rw` 模式下生效，默认 50（即读写各半）。
@@ -178,6 +178,7 @@ kill -TERM $(cat ./daemon_logs/fio_auto_*.pid)
 ```
 
 工作方式：
+
 - 脚本自动用 `nohup` 重新启动自身，所有输出重定向到 `fio_results/fio_auto_{时间戳}.log`
 - PID 写入 `fio_results/fio_auto_{时间戳}.pid`
 - `--daemon` 会自动添加 `-y`（跳过确认），无需额外指定
