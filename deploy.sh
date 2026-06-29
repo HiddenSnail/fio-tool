@@ -3,19 +3,19 @@
 # deploy.sh — 将项目同步到远程测试服务器
 #
 # 用法:
-#   ./deploy.sh --host root@10.0.0.5 [--dir /root/fiotool] [--dry-run]
-#   ./deploy.sh [--dir /opt/fiotool] [--dry-run]        # 使用配置文件
+#   ./deploy.sh --host root@10.0.0.5 [--dir /root/fio-tool] [--dry-run]
+#   ./deploy.sh [--dir /opt/fio-tool] [--dry-run]        # 使用配置文件
 #   ./deploy.sh --setup-ssh                              # 配置 SSH 免密登录
 #
 # 配置文件 .deployrc（项目根目录）:
 #   DEPLOY_HOST=root@10.0.0.5
-#   REMOTE_DIR=/opt/fiotool
+#   REMOTE_DIR=/opt/fio-tool
 #
 # 优先级: --host/--dir 参数 > 环境变量 > .deployrc 配置文件
 
 set -euo pipefail
 
-REMOTE_DIR="/root/fiotool"
+REMOTE_DIR="/root/fio-tool"
 HOST=""
 DRY_RUN=""
 SETUP_SSH=""
@@ -58,7 +58,7 @@ while [ $# -gt 0 ]; do
             echo ""
             echo "部署选项:"
             echo "  --host <host>       SSH 目标 (user@hostname)"
-            echo "  --dir  <path>       远程目录，默认 /root/fiotool"
+            echo "  --dir  <path>       远程目录，默认 /root/fio-tool"
             echo "  --dry-run           预览模式，不实际传输"
             echo "  --setup-ssh         配置 SSH 免密登录（生成密钥 + 拷贝到服务器）"
             echo "  --help              显示此帮助"
@@ -70,7 +70,7 @@ while [ $# -gt 0 ]; do
             echo ""
             echo "配置文件 .deployrc 示例:"
             echo "  DEPLOY_HOST=root@10.0.0.5"
-            echo "  REMOTE_DIR=/opt/fiotool"
+            echo "  REMOTE_DIR=/opt/fio-tool"
             echo ""
             echo "优先级: --host/--dir 参数 > 环境变量 > .deployrc"
             exit 0
