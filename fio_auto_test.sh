@@ -261,7 +261,7 @@ collect_metadata() {
             cpu_cores=$(sysctl -n hw.logicalcpu 2>/dev/null || echo "unknown")
             ;;
         *)
-            cpu_model=$(lscpu 2>/dev/null | grep 'Model name' | sed 's/.*: *//' || echo "unknown")
+            cpu_model=$(lscpu 2>/dev/null | grep 'Model name' | sed 's/.*: *//' | head -1 || echo "unknown")
             cpu_cores=$(nproc 2>/dev/null || echo "unknown")
             ;;
     esac
