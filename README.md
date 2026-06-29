@@ -307,6 +307,7 @@ TEST_SCENARIOS=4k-randread:randread:4k, \
   -q, --quiet          不在终端显示报告，只保存到文件
   -n, --no-sort        不按文件名排序
   -c, --csv            同时生成 CSV 格式报告（可导入 Excel）
+  -l, --latest         自动选择结果目录中最新的一次测试
   --debug              启用调试模式，显示 JSON 结构细节
   -h, --help           显示帮助信息
 ```
@@ -317,11 +318,17 @@ TEST_SCENARIOS=4k-randread:randread:4k, \
 # 基本用法：扫描默认目录并显示文本报告
 ./fio_summary.sh
 
+# 自动选择最新一次测试结果
+./fio_summary.sh --latest
+
 # 指定子目录
 ./fio_summary.sh -d ./fio_results/ssd-vfs-cache-full
 
-# 文本 + CSV 报告
+# 文本 + CSV 报告（含环境信息 CSV）
 ./fio_summary.sh -c
+
+# 最新结果 + CSV
+./fio_summary.sh --latest -c
 
 # 静默模式，只保存报告文件
 ./fio_summary.sh -q -o quick_check.txt
@@ -331,6 +338,7 @@ TEST_SCENARIOS=4k-randread:randread:4k, \
 
 - **文本报告** — 保存在 `./reports/` 目录下（可通过 `-o` 指定），命名格式为 `fio_summary_{时间戳}.txt`
 - **CSV 报告** — 启用 `-c` 时生成，与文本报告同名但后缀为 `.csv`，可直接导入 Excel 进行对比分析
+- **环境信息 CSV** — 启用 `-c` 时额外生成 `fio_summary_{时间戳}_env.csv`，记录测试环境元数据（主机名、CPU、内存、磁盘等）
 
 ---
 
@@ -364,7 +372,7 @@ fiotool/
   ├── fio_summary.sh             # 报告生成脚本
   ├── README.md                  # 本文档
   ├── .gitignore
-  ├── fio_results/               # JSON 测试结果（按场景子目录分组）
+  ├── results/               # JSON 测试结果（按场景子目录分组）
   │   ├── _env_*.json            # 环境元数据（自动生成）
   │   ├── ssd-vfs-cache-full/
   │   ├── ssd-vfs-cache-writes/
@@ -384,7 +392,7 @@ fiotool/
 - **I/O 引擎**：默认使用 `libaio`，Linux 上需安装 `libaio-dev`；macOS 或其他无 libaio 的环境会自动回退到 `sync`。
 - **裸设备权限**：测试裸设备通常需要 `root` 权限或用 `sudo` 执行。
 - **环境元数据**：结果目录中的 `_env_*.json` 文件记录测试环境的完整信息，归档时请一并保留。
-- **Git 忽略**：`fio_results/` 和 `reports/` 已在 `.gitignore` 中排除，避免大量数据和生成文件纳入版本管理。
+- **Git 忽略**：`results/` 和 `reports/` 已在 `.gitignore` 中排除，避免大量数据和生成文件纳入版本管理。
 
 ---
 
